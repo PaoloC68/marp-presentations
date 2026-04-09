@@ -16,14 +16,22 @@
           <div class="marp-pane-header">
             <span class="material-symbols-outlined">edit_note</span>
             <span x-text="$store.marpStore.currentFile || 'Untitled.md'"></span>
+            <div style="flex:1"></div>
+            <!-- Color toolbar -->
+            <div class="marp-color-toolbar">
+              <label class="marp-color-btn" title="Insert background color for current slide">
+                <span class="material-symbols-outlined">format_color_fill</span>
+                <span>BG</span>
+                <input type="color" id="marp-bg-color" value="#1e1e2e">
+              </label>
+              <label class="marp-color-btn" title="Insert text color for current slide">
+                <span class="material-symbols-outlined">format_color_text</span>
+                <span>Text</span>
+                <input type="color" id="marp-text-color" value="#ffffff">
+              </label>
+            </div>
           </div>
-          <textarea
-            id="marp-editor-textarea"
-            class="marp-textarea"
-            spellcheck="false"
-            x-model="$store.marpStore.currentContent"
-            @input="marpEditorScheduleRender()"
-            placeholder="Write Marp markdown here..."></textarea>
+          <div id="marp-codemirror" class="marp-codemirror-wrap"></div>
         </div>
 
         <!-- Preview pane -->
@@ -31,6 +39,7 @@
           <div class="marp-pane-header">
             <span class="material-symbols-outlined">slideshow</span>
             <span>Preview</span>
+            <span style="font-size:11px;opacity:0.4;margin-left:4px">(click slide → jump to code)</span>
             <span class="marp-preview-count" x-text="$store.marpStore.slideCount > 0 ? $store.marpStore.slideCount + ' slides' : ''"></span>
           </div>
           <div id="marp-editor-preview" class="marp-editor-preview">
@@ -51,7 +60,7 @@
       <span class="marp-editor-status" id="marp-editor-status">Ready</span>
     </div>
     <div class="marp-editor-footer-right">
-      <button class="btn btn-cancel" @click="marpEditorSave()" title="Save changes">
+      <button class="btn btn-cancel" @click="marpEditorSave()">
         <span class="material-symbols-outlined">save</span>
         <span>Save</span>
       </button>
@@ -59,9 +68,7 @@
         <span class="material-symbols-outlined">check</span>
         <span>Save &amp; Close</span>
       </button>
-      <button class="btn btn-cancel" @click="closeModal()">
-        Discard
-      </button>
+      <button class="btn btn-cancel" @click="closeModal()">Discard</button>
     </div>
   </div>
 
@@ -69,7 +76,7 @@
     .marp-editor-layout {
       display: flex;
       flex-direction: row;
-      height: 520px;
+      height: 560px;
       gap: 0;
       overflow: hidden;
     }
@@ -90,40 +97,66 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      padding: 8px 12px;
+      padding: 6px 10px;
       background: var(--color-panel);
       border-bottom: 1px solid var(--color-border);
       font-size: 13px;
       font-weight: 500;
       color: var(--color-text);
+      flex-shrink: 0;
     }
-    .marp-pane-header .material-symbols-outlined {
-      font-size: 16px;
-      opacity: 0.7;
+    .marp-pane-header .material-symbols-outlined { font-size: 16px; opacity: 0.7; }
+    .marp-preview-count { margin-left: auto; font-size: 11px; opacity: 0.5; }
+
+    /* Color toolbar */
+    .marp-color-toolbar {
+      display: flex;
+      gap: 4px;
+      align-items: center;
     }
-    .marp-preview-count {
-      margin-left: auto;
+    .marp-color-btn {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      padding: 3px 7px;
+      border-radius: 4px;
+      cursor: pointer;
       font-size: 11px;
-      opacity: 0.5;
-    }
-    .marp-textarea {
-      flex: 1;
-      width: 100%;
-      border: none;
-      outline: none;
-      resize: none;
-      background: var(--color-input, #1a1a2e);
+      background: var(--color-input, #2a2a3e);
+      border: 1px solid var(--color-border);
       color: var(--color-text);
-      font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+      position: relative;
+      user-select: none;
+    }
+    .marp-color-btn:hover { background: var(--color-border); }
+    .marp-color-btn .material-symbols-outlined { font-size: 14px; opacity: 0.8; }
+    .marp-color-btn input[type=color] {
+      position: absolute;
+      opacity: 0;
+      width: 1px;
+      height: 1px;
+      pointer-events: none;
+    }
+
+    /* CodeMirror container */
+    .marp-codemirror-wrap {
+      flex: 1;
+      overflow: hidden;
+      min-height: 0;
+    }
+    .marp-codemirror-wrap .cm-editor {
+      height: 100%;
+    }
+    .marp-codemirror-wrap .cm-editor.cm-focused {
+      outline: none;
+    }
+    .marp-codemirror-wrap .cm-scroller {
+      font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace !important;
       font-size: 13px;
       line-height: 1.6;
-      padding: 12px;
-      box-sizing: border-box;
-      tab-size: 2;
     }
-    .marp-textarea::placeholder {
-      opacity: 0.3;
-    }
+
+    /* Preview pane */
     .marp-editor-preview {
       flex: 1;
       overflow-y: auto;
@@ -139,13 +172,8 @@
       opacity: 0.3;
       gap: 8px;
     }
-    .marp-preview-placeholder .material-symbols-outlined {
-      font-size: 40px;
-    }
-    .marp-preview-placeholder p {
-      margin: 0;
-      font-size: 13px;
-    }
+    .marp-preview-placeholder .material-symbols-outlined { font-size: 40px; }
+    .marp-preview-placeholder p { margin: 0; font-size: 13px; }
     #marp-editor-preview svg[data-marpit-svg] {
       display: block;
       width: 100%;
@@ -153,10 +181,17 @@
       margin-bottom: 10px;
       border-radius: 4px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      cursor: pointer;
+      transition: outline 0.15s;
+      outline: 2px solid transparent;
     }
-    #marp-editor-preview svg[data-marpit-svg]:last-of-type {
-      margin-bottom: 0;
+    #marp-editor-preview svg[data-marpit-svg]:hover {
+      outline: 2px solid rgba(124,124,255,0.5);
     }
+    #marp-editor-preview svg[data-marpit-svg].marp-active-slide {
+      outline: 2px solid #7c7cff;
+    }
+
     .marp-editor-footer {
       display: flex;
       align-items: center;
@@ -168,10 +203,7 @@
       align-items: center;
       gap: 8px;
     }
-    .marp-editor-status {
-      font-size: 12px;
-      opacity: 0.5;
-    }
+    .marp-editor-status { font-size: 12px; opacity: 0.5; }
   </style>
 
   <script type="module">
@@ -179,69 +211,219 @@
     import { callJsonApi } from "/js/api.js";
     import { toastFrontendError, toastFrontendSuccess } from "/components/notifications/notification-store.js";
 
+    // ── CodeMirror 6 via CDN ──────────────────────────────────────────
+    let cmView = null;
     let renderTimer = null;
+    let cmReady = false;
 
+    async function loadCodeMirror() {
+      try {
+        const [{ EditorView, basicSetup }, { EditorState }, { markdown }, { oneDark }] = await Promise.all([
+          import('https://esm.sh/codemirror@6.0.1'),
+          import('https://esm.sh/@codemirror/state@6.5.1'),
+          import('https://esm.sh/@codemirror/lang-markdown@6.3.3'),
+          import('https://esm.sh/@codemirror/theme-one-dark@6.1.2'),
+        ]);
+
+        const container = document.getElementById("marp-codemirror");
+        if (!container) return;
+
+        const state = EditorState.create({
+          doc: store.currentContent || '',
+          extensions: [
+            basicSetup,
+            markdown(),
+            oneDark,
+            EditorView.updateListener.of(update => {
+              if (update.docChanged) {
+                store.currentContent = update.state.doc.toString();
+                scheduleRender();
+              }
+            }),
+            EditorView.theme({
+              '&': { height: '100%' },
+              '.cm-content': { fontFamily: "'JetBrains Mono','Fira Code',monospace", fontSize: '13px', lineHeight: '1.6' },
+              '.cm-gutters': { background: '#1a1a2e', borderRight: '1px solid #333' },
+            }),
+          ]
+        });
+
+        cmView = new EditorView({ state, parent: container });
+        cmReady = true;
+        setStatus('Ready');
+      } catch (e) {
+        // Fallback: plain textarea if CDN fails
+        console.warn('CodeMirror CDN load failed, using textarea fallback:', e);
+        const container = document.getElementById("marp-codemirror");
+        if (container) {
+          container.innerHTML = `<textarea id="marp-fallback-ta" style="width:100%;height:100%;background:#1a1a2e;color:#cdd6f4;font-family:monospace;font-size:13px;padding:12px;border:none;outline:none;resize:none;box-sizing:border-box;"></textarea>`;
+          const ta = container.querySelector('textarea');
+          ta.value = store.currentContent || '';
+          ta.addEventListener('input', () => {
+            store.currentContent = ta.value;
+            scheduleRender();
+          });
+        }
+      }
+    }
+
+    // ── Utilities ────────────────────────────────────────────────────
     function setStatus(msg) {
       const el = document.getElementById("marp-editor-status");
       if (el) el.textContent = msg;
     }
 
-    async function renderPreview() {
-      const content = store.currentContent;
-      if (!content || !content.trim()) {
-        const preview = document.getElementById("marp-editor-preview");
-        if (preview) preview.innerHTML = `<div class="marp-preview-placeholder"><span class="material-symbols-outlined">play_circle</span><p>Start typing to preview slides</p></div>`;
-        store.slideCount = 0;
-        return;
-      }
+    function scheduleRender() {
+      setStatus('Editing...');
+      clearTimeout(renderTimer);
+      renderTimer = setTimeout(renderPreview, 800);
+    }
 
-      const preview = document.getElementById("marp-editor-preview");
-      if (!preview) return;
-
-      try {
-        const res = await callJsonApi("/api/plugins/marp-presentations/marp_render", {
-          markdown: content
+    // Insert text at current CodeMirror cursor position
+    function insertAtCursor(text) {
+      if (cmView && cmReady) {
+        const pos = cmView.state.selection.main.head;
+        cmView.dispatch({
+          changes: { from: pos, insert: text + '\n' },
+          selection: { anchor: pos + text.length + 1 }
         });
-        preview.innerHTML = `${res.html}<style>${res.css}</style>`;
-        store.slideCount = res.slideCount || 0;
-        setStatus(`Preview updated — ${res.slideCount} slides`);
-      } catch (e) {
-        setStatus("Render failed");
+        cmView.focus();
+      } else {
+        const ta = document.getElementById('marp-fallback-ta');
+        if (ta) {
+          const start = ta.selectionStart;
+          ta.value = ta.value.slice(0, start) + text + '\n' + ta.value.slice(start);
+          store.currentContent = ta.value;
+          scheduleRender();
+        }
       }
     }
 
-    window.marpEditorInit = function() {
-      if (store.currentContent) {
-        renderPreview();
+    // Jump editor cursor to the start of slide N (0-based)
+    function jumpToSlide(slideIndex) {
+      const content = store.currentContent || '';
+      // Split on slide separators (--- on its own line)
+      const parts = content.split(/\n---\n/);
+      if (slideIndex >= parts.length) return;
+
+      let charPos = 0;
+      for (let i = 0; i < slideIndex; i++) {
+        charPos += parts[i].length + 5; // '\n---\n' = 5 chars
       }
+      // Skip leading newlines in the target slide
+      while (charPos < content.length && content[charPos] === '\n') charPos++;
+
+      if (cmView && cmReady) {
+        cmView.dispatch({
+          selection: { anchor: charPos },
+          scrollIntoView: true,
+          effects: EditorView_scrollTo(charPos)
+        });
+        cmView.focus();
+      } else {
+        const ta = document.getElementById('marp-fallback-ta');
+        if (ta) {
+          ta.focus();
+          ta.setSelectionRange(charPos, charPos);
+        }
+      }
+    }
+
+    // EditorView scroll helper (may not exist — safe fallback)
+    function EditorView_scrollTo(pos) {
+      try {
+        return []; // basic dispatch with scrollIntoView: true is enough
+      } catch(e) { return []; }
+    }
+
+    // ── Preview rendering ────────────────────────────────────────────
+    async function renderPreview() {
+      const content = store.currentContent;
+      const preview = document.getElementById("marp-editor-preview");
+      if (!preview) return;
+
+      if (!content || !content.trim()) {
+        preview.innerHTML = `<div class="marp-preview-placeholder"><span class="material-symbols-outlined">play_circle</span><p>Start typing to preview slides</p></div>`;
+        store.slideCount = 0;
+        return;
+      }
+      try {
+        const res = await callJsonApi("/api/plugins/marp-presentations/marp_render", { markdown: content });
+        preview.innerHTML = `${res.html}<style>${res.css}</style>`;
+        store.slideCount = res.slideCount || 0;
+        setStatus(`${res.slideCount} slides`);
+        attachPreviewClicks();
+      } catch (e) {
+        setStatus('Render failed');
+      }
+    }
+
+    // ── Click-to-sync: preview slide → editor cursor ─────────────────
+    function attachPreviewClicks() {
+      const preview = document.getElementById("marp-editor-preview");
+      if (!preview) return;
+      const svgs = preview.querySelectorAll('svg[data-marpit-svg]');
+      svgs.forEach((svg, idx) => {
+        svg.title = `Slide ${idx + 1} — click to jump in editor`;
+        svg.addEventListener('click', () => {
+          // Highlight selected
+          svgs.forEach(s => s.classList.remove('marp-active-slide'));
+          svg.classList.add('marp-active-slide');
+          // Jump editor cursor
+          jumpToSlide(idx);
+          setStatus(`Jumped to slide ${idx + 1}`);
+        });
+      });
+    }
+
+    // ── Color toolbar ────────────────────────────────────────────────
+    function initColorToolbar() {
+      const bgInput = document.getElementById('marp-bg-color');
+      const textInput = document.getElementById('marp-text-color');
+      if (bgInput) {
+        bgInput.addEventListener('change', () => {
+          insertAtCursor(`<!-- _backgroundColor: ${bgInput.value} -->`);
+          scheduleRender();
+        });
+      }
+      if (textInput) {
+        textInput.addEventListener('change', () => {
+          insertAtCursor(`<!-- _color: ${textInput.value} -->`);
+          scheduleRender();
+        });
+      }
+    }
+
+    // ── Lifecycle ────────────────────────────────────────────────────
+    window.marpEditorInit = function() {
+      setTimeout(async () => {
+        setStatus('Loading editor...');
+        await loadCodeMirror();
+        initColorToolbar();
+        if (store.currentContent) renderPreview();
+      }, 50);
     };
 
     window.marpEditorCleanup = function() {
       clearTimeout(renderTimer);
+      if (cmView) { cmView.destroy(); cmView = null; cmReady = false; }
     };
 
-    window.marpEditorScheduleRender = function() {
-      setStatus("Editing...");
-      clearTimeout(renderTimer);
-      renderTimer = setTimeout(() => renderPreview(), 800);
-    };
+    window.marpEditorScheduleRender = function() { scheduleRender(); };
 
     window.marpEditorSave = async function() {
-      if (!store.currentFile) {
-        toastFrontendError("No filename set.");
-        return;
-      }
-      setStatus("Saving...");
+      if (!store.currentFile) { toastFrontendError("No filename set."); return; }
+      setStatus('Saving...');
       try {
         await callJsonApi("/api/plugins/marp-presentations/marp_save", {
           filename: store.currentFile,
           content: store.currentContent
         });
-        setStatus("Saved");
-        toastFrontendSuccess("Saved: " + store.currentFile);
+        setStatus('Saved ✓');
+        toastFrontendSuccess('Saved: ' + store.currentFile);
       } catch (e) {
-        setStatus("Save failed");
-        toastFrontendError("Save failed: " + e.message);
+        setStatus('Save failed');
+        toastFrontendError('Save failed: ' + e.message);
       }
     };
 
