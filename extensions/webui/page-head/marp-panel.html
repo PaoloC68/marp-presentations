@@ -1,0 +1,352 @@
+<div x-data>
+  <script type="module" src="/plugins/marp-presentations/webui/marp-store.js"></script>
+  <template x-if="$store.marpStore">
+    <div x-show="$store.marpStore.panelOpen" class="marp-panel" id="marp-floating-panel">
+
+      <!-- Title bar (draggable) -->
+      <div class="marp-panel-titlebar" id="marp-panel-titlebar">
+        <span class="material-symbols-outlined" style="font-size:18px">slideshow</span>
+        <span class="marp-panel-title" x-text="$store.marpStore.currentFile || 'Presentations'"></span>
+        <div style="flex:1"></div>
+        <button class="marp-panel-btn" @click="$store.marpStore.closePanel()" title="Close">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <!-- File list (when no file loaded) -->
+      <template x-if="!$store.marpStore.currentFile">
+        <div class="marp-panel-body">
+          <template x-if="$store.marpStore.filesLoading">
+            <div class="marp-panel-center"><div class="loading"></div></div>
+          </template>
+          <template x-if="!$store.marpStore.filesLoading && $store.marpStore.files.length === 0">
+            <div class="marp-panel-center">
+              <span class="material-symbols-outlined" style="font-size:36px;opacity:0.3">folder_open</span>
+              <p style="opacity:0.4;font-size:13px">No presentations yet</p>
+            </div>
+          </template>
+          <template x-if="!$store.marpStore.filesLoading && $store.marpStore.files.length > 0">
+            <div class="marp-file-list">
+              <template x-for="file in $store.marpStore.files" :key="file.name">
+                <button class="marp-file-item" @click="$store.marpStore.openFile(file.name)">
+                  <span class="material-symbols-outlined" style="font-size:16px">description</span>
+                  <span x-text="file.name" style="flex:1;font-size:13px"></span>
+                </button>
+              </template>
+            </div>
+          </template>
+        </div>
+      </template>
+
+      <!-- Slide viewer (single slide at a time) -->
+      <template x-if="$store.marpStore.currentFile">
+        <div class="marp-panel-body marp-slide-body">
+          <template x-if="$store.marpStore.rendering">
+            <div class="marp-panel-center"><span style="opacity:0.4;font-size:13px">Rendering...</span></div>
+          </template>
+          <div id="marp-slide-display" class="marp-slide-display"></div>
+        </div>
+      </template>
+
+      <!-- Footer bar: navigation + actions -->
+      <template x-if="$store.marpStore.currentFile">
+        <div class="marp-panel-footer">
+          <button class="marp-panel-btn" @click="$store.marpStore.backToList()" title="Back to list">
+            <span class="material-symbols-outlined">arrow_back</span>
+          </button>
+          <button class="marp-panel-btn" @click="$store.marpStore.prevSlide()" :disabled="$store.marpStore.currentSlide===0" title="Previous slide">
+            <span class="material-symbols-outlined">navigate_before</span>
+          </button>
+          <span class="marp-slide-num">
+            <span x-text="$store.marpStore.slideCount>0?($store.marpStore.currentSlide+1):0"></span>/<span x-text="$store.marpStore.slideCount"></span>
+          </span>
+          <button class="marp-panel-btn" @click="$store.marpStore.nextSlide()" :disabled="$store.marpStore.currentSlide>=$store.marpStore.slideCount-1" title="Next slide">
+            <span class="material-symbols-outlined">navigate_next</span>
+          </button>
+          <div style="flex:1"></div>
+          <button class="marp-panel-btn" @click="openModal('/plugins/marp-presentations/webui/marp-editor.html')" title="Edit">
+            <span class="material-symbols-outlined">edit</span>
+          </button>
+          <!-- Export dropdown -->
+          <div class="marp-export-wrap" @click.outside="$store.marpStore.exportDropdownOpen=false">
+            <button class="marp-panel-btn" @click="$store.marpStore.exportDropdownOpen=!$store.marpStore.exportDropdownOpen" :disabled="$store.marpStore.exportLoading" title="Export">
+              <template x-if="!$store.marpStore.exportLoading"><span class="material-symbols-outlined">download</span></template>
+              <template x-if="$store.marpStore.exportLoading"><span class="material-symbols-outlined marp-spin">progress_activity</span></template>
+            </button>
+            <div class="marp-export-dropdown" x-show="$store.marpStore.exportDropdownOpen" x-cloak>
+              <button class="marp-export-item" @click="$store.marpStore.exportPresentation('html')">HTML</button>
+              <button class="marp-export-item" @click="$store.marpStore.exportPresentation('pdf')">PDF</button>
+              <button class="marp-export-item" @click="$store.marpStore.exportPresentation('pptx')">PPTX</button>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Resize handle -->
+      <div class="marp-resize-handle" id="marp-resize-handle"></div>
+    </div>
+  </template>
+
+  <style>
+    .marp-panel {
+      position: fixed;
+      top: 60px;
+      right: 20px;
+      width: 640px;
+      height: 520px;
+      min-width: 320px;
+      min-height: 300px;
+      background: var(--color-panel, #1e1e2e);
+      border: 1px solid var(--color-border, #333);
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .marp-panel-titlebar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--color-panel, #1e1e2e);
+      border-bottom: 1px solid var(--color-border, #333);
+      cursor: grab;
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .marp-panel-titlebar:active { cursor: grabbing; }
+    .marp-panel-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--color-text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .marp-panel-btn {
+      background: none;
+      border: none;
+      color: var(--color-text);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      opacity: 0.7;
+    }
+    .marp-panel-btn:hover { opacity: 1; background: var(--color-border, #333); }
+    .marp-panel-btn:disabled { opacity: 0.2; cursor: default; }
+    .marp-panel-btn .material-symbols-outlined { font-size: 18px; }
+    .marp-panel-body {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .marp-panel-center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 8px;
+    }
+    .marp-file-list {
+      padding: 8px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .marp-file-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: var(--color-input, #2a2a3e);
+      border: 1px solid transparent;
+      color: var(--color-text);
+      cursor: pointer;
+      text-align: left;
+      width: 100%;
+    }
+    .marp-file-item:hover { border-color: var(--color-accent, #555); background: var(--color-border, #333); }
+    .marp-slide-body { background: #0f0f1a; padding: 8px; }
+    .marp-slide-display {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .marp-slide-display svg[data-marpit-svg] {
+      display: block;
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
+      border-radius: 4px;
+    }
+    .marp-panel-footer {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 10px;
+      border-top: 1px solid var(--color-border, #333);
+      background: var(--color-panel, #1e1e2e);
+      flex-shrink: 0;
+    }
+    .marp-slide-num {
+      font-size: 12px;
+      color: var(--color-text);
+      opacity: 0.6;
+      min-width: 40px;
+      text-align: center;
+    }
+    .marp-export-wrap { position: relative; }
+    .marp-export-dropdown {
+      position: absolute;
+      bottom: calc(100% + 6px);
+      right: 0;
+      background: var(--color-panel, #1e1e2e);
+      border: 1px solid var(--color-border, #333);
+      border-radius: 8px;
+      padding: 4px;
+      min-width: 80px;
+      z-index: 100;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    }
+    .marp-export-item {
+      display: block;
+      width: 100%;
+      padding: 6px 10px;
+      background: none;
+      border: none;
+      color: var(--color-text);
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 13px;
+      text-align: left;
+    }
+    .marp-export-item:hover { background: var(--color-border, #333); }
+    .marp-resize-handle {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 20px;
+      height: 20px;
+      cursor: nwse-resize;
+      z-index: 10;
+    }
+    .marp-resize-handle::after {
+      content: '';
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
+      width: 10px;
+      height: 10px;
+      border-right: 2px solid var(--color-text);
+      border-bottom: 2px solid var(--color-text);
+      opacity: 0.4;
+    }
+    @keyframes marp-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .marp-spin { animation: marp-spin 1s linear infinite; display: inline-block; }
+    [x-cloak] { display: none !important; }
+  </style>
+</div>
+
+<script>
+  // Drag + Resize + Keyboard — runs outside Alpine, uses MutationObserver to wait for panel
+  (function() {
+    let initialized = false;
+
+    function initPanel(panel) {
+      if (initialized) return;
+      initialized = true;
+
+      // ---- DRAG ----
+      const titlebar = panel.querySelector('.marp-panel-titlebar');
+      if (titlebar) {
+        let dragging = false, offsetX = 0, offsetY = 0;
+
+        titlebar.addEventListener('mousedown', function(e) {
+          if (e.target.closest('button')) return;
+          dragging = true;
+          const rect = panel.getBoundingClientRect();
+          offsetX = e.clientX - rect.left;
+          offsetY = e.clientY - rect.top;
+          e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', function(e) {
+          if (!dragging) return;
+          panel.style.left = (e.clientX - offsetX) + 'px';
+          panel.style.top = (e.clientY - offsetY) + 'px';
+          panel.style.right = 'auto';
+        });
+
+        document.addEventListener('mouseup', function() {
+          dragging = false;
+        });
+      }
+
+      // ---- RESIZE ----
+      const handle = panel.querySelector('.marp-resize-handle');
+      if (handle) {
+        let resizing = false, startW = 0, startH = 0, startX = 0, startY = 0;
+
+        handle.addEventListener('mousedown', function(e) {
+          resizing = true;
+          startW = panel.offsetWidth;
+          startH = panel.offsetHeight;
+          startX = e.clientX;
+          startY = e.clientY;
+          e.preventDefault();
+          e.stopPropagation();
+        });
+
+        document.addEventListener('mousemove', function(e) {
+          if (!resizing) return;
+          var w = Math.max(320, startW + (e.clientX - startX));
+          var h = Math.max(300, startH + (e.clientY - startY));
+          panel.style.width = w + 'px';
+          panel.style.height = h + 'px';
+        });
+
+        document.addEventListener('mouseup', function() {
+          resizing = false;
+        });
+      }
+
+      // ---- KEYBOARD NAV ----
+      document.addEventListener('keydown', function(e) {
+        if (!window.Alpine || !window.Alpine.store) return;
+        var s = window.Alpine.store('marpStore');
+        if (!s || !s.panelOpen || !s.currentFile) return;
+        if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); s.nextSlide(); }
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); s.prevSlide(); }
+      });
+    }
+
+    // Poll for panel element (Alpine creates it asynchronously via x-if)
+    function waitForPanel() {
+      var panel = document.getElementById('marp-floating-panel');
+      if (panel) {
+        initPanel(panel);
+      } else {
+        setTimeout(waitForPanel, 300);
+      }
+    }
+
+    // Start polling after DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', waitForPanel);
+    } else {
+      waitForPanel();
+    }
+  })();
+</script>
