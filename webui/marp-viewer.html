@@ -1,0 +1,379 @@
+<html>
+<head>
+  <title>Presentations</title>
+  <script type="module" src="/plugins/marp-presentations/webui/marp-store.js"></script>
+</head>
+
+<body>
+  <div x-data>
+    <template x-if="$store.marpStore">
+      <div
+        class="marp-viewer"
+        x-create="$store.marpStore.onOpen()"
+        x-destroy="$store.marpStore.cleanup()">
+
+        <!-- File list (shown when no file loaded) -->
+        <template x-if="!$store.marpStore.currentFile">
+          <div class="marp-file-list">
+            <div class="marp-welcome">
+              <span class="material-symbols-outlined marp-big-icon">slideshow</span>
+              <h2>Marp Presentations</h2>
+              <p>Select a saved presentation or ask the agent to create one.</p>
+            </div>
+
+            <template x-if="$store.marpStore.filesLoading">
+              <div class="loading"></div>
+            </template>
+
+            <template x-if="!$store.marpStore.filesLoading && $store.marpStore.files.length === 0">
+              <div class="marp-empty">
+                <span class="material-symbols-outlined">folder_open</span>
+                <p>No presentations yet. Ask the agent to create one!</p>
+              </div>
+            </template>
+
+            <template x-if="$store.marpStore.files.length > 0">
+              <div class="marp-files">
+                <template x-for="file in $store.marpStore.files" :key="file.name">
+                  <button
+                    class="marp-file-item"
+                    @click="$store.marpStore.openFile(file.name)">
+                    <span class="material-symbols-outlined">description</span>
+                    <span class="marp-file-name" x-text="file.name"></span>
+                    <span class="marp-file-size" x-text="(file.size / 1024).toFixed(1) + ' KB'"></span>
+                  </button>
+                </template>
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <!-- Slide viewer (shown when file is loaded) -->
+        <template x-if="$store.marpStore.currentFile">
+          <div class="marp-slides-wrapper">
+            <!-- Slide title bar -->
+            <div class="marp-slide-titlebar">
+              <button class="marp-back-btn" @click="$store.marpStore.currentFile = ''" title="Back to list">
+                <span class="material-symbols-outlined">arrow_back</span>
+              </button>
+              <span class="marp-filename" x-text="$store.marpStore.currentFile"></span>
+              <template x-if="$store.marpStore.rendering">
+                <span class="marp-rendering">Rendering...</span>
+              </template>
+            </div>
+
+            <!-- Slides container — HTML injected by store._injectSlides() -->
+            <div id="marp-slides-container" class="marp-slides-container"></div>
+          </div>
+        </template>
+
+      </div>
+    </template>
+  </div>
+
+  <!-- Footer: navigation + export -->
+  <div class="modal-footer marp-footer" data-modal-footer>
+    <div class="marp-footer-left">
+      <template x-if="$store.marpStore && $store.marpStore.currentFile">
+        <div class="marp-nav">
+          <button class="btn btn-cancel marp-nav-btn"
+            @click="$store.marpStore.prevSlide()"
+            :disabled="$store.marpStore.currentSlide === 0"
+            title="Previous slide">
+            <span class="material-symbols-outlined">navigate_before</span>
+          </button>
+          <span class="marp-slide-indicator">
+            <span x-text="$store.marpStore.slideCount > 0 ? ($store.marpStore.currentSlide + 1) : 0"></span>
+            /
+            <span x-text="$store.marpStore.slideCount"></span>
+          </span>
+          <button class="btn btn-cancel marp-nav-btn"
+            @click="$store.marpStore.nextSlide()"
+            :disabled="$store.marpStore.currentSlide >= $store.marpStore.slideCount - 1"
+            title="Next slide">
+            <span class="material-symbols-outlined">navigate_next</span>
+          </button>
+        </div>
+      </template>
+    </div>
+
+    <div class="marp-footer-right">
+      <template x-if="$store.marpStore && $store.marpStore.currentFile">
+        <div class="marp-footer-actions">
+          <!-- Open editor -->
+          <button class="btn btn-cancel"
+            @click="openModal('/plugins/marp-presentations/webui/marp-editor.html')"
+            title="Edit presentation">
+            <span class="material-symbols-outlined">edit</span>
+            <span>Edit</span>
+          </button>
+
+          <!-- Export dropdown -->
+          <div class="marp-export-wrap" @click.outside="$store.marpStore.exportDropdownOpen = false">
+            <button class="btn btn-ok marp-export-btn"
+              @click="$store.marpStore.exportDropdownOpen = !$store.marpStore.exportDropdownOpen"
+              :disabled="$store.marpStore.exportLoading"
+              title="Export presentation">
+              <template x-if="!$store.marpStore.exportLoading">
+                <span class="material-symbols-outlined">download</span>
+              </template>
+              <template x-if="$store.marpStore.exportLoading">
+                <span class="material-symbols-outlined marp-spin">progress_activity</span>
+              </template>
+              <span>Export</span>
+              <span class="material-symbols-outlined marp-chevron">expand_more</span>
+            </button>
+            <div class="marp-export-dropdown" x-show="$store.marpStore.exportDropdownOpen">
+              <button class="marp-export-item" @click="$store.marpStore.exportPresentation('html')">
+                <span class="material-symbols-outlined">html</span>
+                <span>HTML</span>
+              </button>
+              <button class="marp-export-item" @click="$store.marpStore.exportPresentation('pdf')">
+                <span class="material-symbols-outlined">picture_as_pdf</span>
+                <span>PDF</span>
+              </button>
+              <button class="marp-export-item" @click="$store.marpStore.exportPresentation('pptx')">
+                <span class="material-symbols-outlined">co_present</span>
+                <span>PPTX</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <button class="btn btn-cancel" @click="closeModal()">
+        Close
+      </button>
+    </div>
+  </div>
+
+  <style>
+    .marp-viewer {
+      min-height: 400px;
+    }
+
+    /* ---- File list ---- */
+    .marp-welcome {
+      text-align: center;
+      padding: var(--spacing-lg, 24px) var(--spacing-md, 16px) var(--spacing-md, 16px);
+      color: var(--color-text);
+    }
+    .marp-big-icon {
+      font-size: 48px;
+      color: var(--color-accent);
+      display: block;
+      margin-bottom: 8px;
+    }
+    .marp-welcome h2 {
+      margin: 0 0 8px;
+      font-size: 20px;
+    }
+    .marp-welcome p {
+      margin: 0;
+      opacity: 0.7;
+      font-size: 14px;
+    }
+    .marp-empty {
+      text-align: center;
+      padding: var(--spacing-lg, 24px);
+      opacity: 0.5;
+    }
+    .marp-empty span {
+      font-size: 40px;
+      display: block;
+      margin-bottom: 8px;
+    }
+    .marp-files {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 0 var(--spacing-md, 16px) var(--spacing-md, 16px);
+    }
+    .marp-file-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      background: var(--color-input, #2a2a3e);
+      border: 1px solid var(--color-border);
+      color: var(--color-text);
+      cursor: pointer;
+      text-align: left;
+      transition: background var(--transition-speed, 0.2s);
+    }
+    .marp-file-item:hover {
+      background: var(--color-accent, #444);
+      border-color: var(--color-accent);
+    }
+    .marp-file-name {
+      flex: 1;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .marp-file-size {
+      font-size: 12px;
+      opacity: 0.5;
+    }
+
+    /* ---- Slide viewer ---- */
+    .marp-slides-wrapper {
+      display: flex;
+      flex-direction: column;
+    }
+    .marp-slide-titlebar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px var(--spacing-md, 16px);
+      border-bottom: 1px solid var(--color-border);
+      background: var(--color-panel);
+    }
+    .marp-back-btn {
+      background: none;
+      border: none;
+      color: var(--color-text);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+    }
+    .marp-back-btn:hover { background: var(--color-border); }
+    .marp-filename {
+      font-size: 13px;
+      opacity: 0.7;
+      font-family: monospace;
+    }
+    .marp-rendering {
+      font-size: 12px;
+      opacity: 0.5;
+      margin-left: auto;
+    }
+    .marp-slides-container {
+      padding: var(--spacing-md, 16px);
+      background: #1a1a2e;
+      min-height: 360px;
+    }
+    /* Marp core SVG slides */
+    .marp-slides-container svg[data-marpit-svg] {
+      display: block;
+      width: 100%;
+      height: auto;
+      margin-bottom: var(--spacing-md, 16px);
+      border-radius: 4px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+    }
+    .marp-slides-container svg[data-marpit-svg]:last-child {
+      margin-bottom: 0;
+    }
+
+    /* ---- Footer ---- */
+    .marp-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .marp-footer-left, .marp-footer-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .marp-nav {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .marp-nav-btn {
+      padding: 4px 8px !important;
+      min-width: 0 !important;
+    }
+    .marp-slide-indicator {
+      font-size: 13px;
+      min-width: 60px;
+      text-align: center;
+      color: var(--color-text);
+      opacity: 0.8;
+    }
+    .marp-footer-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ---- Export dropdown ---- */
+    .marp-export-wrap {
+      position: relative;
+    }
+    .marp-export-btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .marp-chevron {
+      font-size: 18px !important;
+    }
+    .marp-export-dropdown {
+      position: absolute;
+      bottom: calc(100% + 6px);
+      right: 0;
+      background: var(--color-panel);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 4px;
+      min-width: 130px;
+      z-index: 100;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    }
+    .marp-export-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 8px 12px;
+      background: none;
+      border: none;
+      color: var(--color-text);
+      cursor: pointer;
+      border-radius: 6px;
+      font-size: 14px;
+      text-align: left;
+    }
+    .marp-export-item:hover {
+      background: var(--color-accent, #444);
+    }
+
+    @keyframes marp-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .marp-spin {
+      display: inline-block;
+      animation: marp-spin 1s linear infinite;
+    }
+  </style>
+
+  <script type="module">
+    import { store } from "/plugins/marp-presentations/webui/marp-store.js";
+
+    // Keyboard navigation
+    function handleKey(e) {
+      if (!store.currentFile) return;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); store.nextSlide(); }
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); store.prevSlide(); }
+    }
+    window.addEventListener("keydown", handleKey);
+
+    // Cleanup on modal close
+    const observer = new MutationObserver(() => {
+      if (!document.getElementById("marp-slides-container")) {
+        window.removeEventListener("keydown", handleKey);
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  </script>
+</body>
+</html>

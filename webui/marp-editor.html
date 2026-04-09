@@ -1,0 +1,255 @@
+<html>
+<head>
+  <title>Edit Presentation</title>
+  <script type="module" src="/plugins/marp-presentations/webui/marp-store.js"></script>
+</head>
+
+<body>
+  <div x-data>
+    <template x-if="$store.marpStore">
+      <div class="marp-editor-layout"
+        x-create="marpEditorInit()"
+        x-destroy="marpEditorCleanup()">
+
+        <!-- Editor pane -->
+        <div class="marp-editor-pane">
+          <div class="marp-pane-header">
+            <span class="material-symbols-outlined">edit_note</span>
+            <span x-text="$store.marpStore.currentFile || 'Untitled.md'"></span>
+          </div>
+          <textarea
+            id="marp-editor-textarea"
+            class="marp-textarea"
+            spellcheck="false"
+            x-model="$store.marpStore.currentContent"
+            @input="marpEditorScheduleRender()"
+            placeholder="Write Marp markdown here..."></textarea>
+        </div>
+
+        <!-- Preview pane -->
+        <div class="marp-preview-pane">
+          <div class="marp-pane-header">
+            <span class="material-symbols-outlined">slideshow</span>
+            <span>Preview</span>
+            <span class="marp-preview-count" x-text="$store.marpStore.slideCount > 0 ? $store.marpStore.slideCount + ' slides' : ''"></span>
+          </div>
+          <div id="marp-editor-preview" class="marp-editor-preview">
+            <div class="marp-preview-placeholder">
+              <span class="material-symbols-outlined">play_circle</span>
+              <p>Start typing to preview slides</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </template>
+  </div>
+
+  <!-- Footer -->
+  <div class="modal-footer marp-editor-footer" data-modal-footer>
+    <div class="marp-editor-footer-left">
+      <span class="marp-editor-status" id="marp-editor-status">Ready</span>
+    </div>
+    <div class="marp-editor-footer-right">
+      <button class="btn btn-cancel" @click="marpEditorSave()" title="Save changes">
+        <span class="material-symbols-outlined">save</span>
+        <span>Save</span>
+      </button>
+      <button class="btn btn-ok" @click="marpEditorSaveAndClose()">
+        <span class="material-symbols-outlined">check</span>
+        <span>Save &amp; Close</span>
+      </button>
+      <button class="btn btn-cancel" @click="closeModal()">
+        Discard
+      </button>
+    </div>
+  </div>
+
+  <style>
+    .marp-editor-layout {
+      display: flex;
+      flex-direction: row;
+      height: 520px;
+      gap: 0;
+      overflow: hidden;
+    }
+    .marp-editor-pane {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--color-border);
+      min-width: 0;
+    }
+    .marp-preview-pane {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .marp-pane-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      background: var(--color-panel);
+      border-bottom: 1px solid var(--color-border);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--color-text);
+    }
+    .marp-pane-header .material-symbols-outlined {
+      font-size: 16px;
+      opacity: 0.7;
+    }
+    .marp-preview-count {
+      margin-left: auto;
+      font-size: 11px;
+      opacity: 0.5;
+    }
+    .marp-textarea {
+      flex: 1;
+      width: 100%;
+      border: none;
+      outline: none;
+      resize: none;
+      background: var(--color-input, #1a1a2e);
+      color: var(--color-text);
+      font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      padding: 12px;
+      box-sizing: border-box;
+      tab-size: 2;
+    }
+    .marp-textarea::placeholder {
+      opacity: 0.3;
+    }
+    .marp-editor-preview {
+      flex: 1;
+      overflow-y: auto;
+      background: #1a1a2e;
+      padding: 12px;
+    }
+    .marp-preview-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      opacity: 0.3;
+      gap: 8px;
+    }
+    .marp-preview-placeholder .material-symbols-outlined {
+      font-size: 40px;
+    }
+    .marp-preview-placeholder p {
+      margin: 0;
+      font-size: 13px;
+    }
+    #marp-editor-preview svg[data-marpit-svg] {
+      display: block;
+      width: 100%;
+      height: auto;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+    #marp-editor-preview svg[data-marpit-svg]:last-of-type {
+      margin-bottom: 0;
+    }
+    .marp-editor-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .marp-editor-footer-left, .marp-editor-footer-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .marp-editor-status {
+      font-size: 12px;
+      opacity: 0.5;
+    }
+  </style>
+
+  <script type="module">
+    import { store } from "/plugins/marp-presentations/webui/marp-store.js";
+    import { callJsonApi } from "/js/api.js";
+    import { toastFrontendError, toastFrontendSuccess } from "/components/notifications/notification-store.js";
+
+    let renderTimer = null;
+
+    function setStatus(msg) {
+      const el = document.getElementById("marp-editor-status");
+      if (el) el.textContent = msg;
+    }
+
+    async function renderPreview() {
+      const content = store.currentContent;
+      if (!content || !content.trim()) {
+        const preview = document.getElementById("marp-editor-preview");
+        if (preview) preview.innerHTML = `<div class="marp-preview-placeholder"><span class="material-symbols-outlined">play_circle</span><p>Start typing to preview slides</p></div>`;
+        store.slideCount = 0;
+        return;
+      }
+
+      const preview = document.getElementById("marp-editor-preview");
+      if (!preview) return;
+
+      try {
+        const res = await callJsonApi("/api/plugins/marp-presentations/marp_render", {
+          markdown: content
+        });
+        preview.innerHTML = `${res.html}<style>${res.css}</style>`;
+        store.slideCount = res.slideCount || 0;
+        setStatus(`Preview updated — ${res.slideCount} slides`);
+      } catch (e) {
+        setStatus("Render failed");
+      }
+    }
+
+    window.marpEditorInit = function() {
+      if (store.currentContent) {
+        renderPreview();
+      }
+    };
+
+    window.marpEditorCleanup = function() {
+      clearTimeout(renderTimer);
+    };
+
+    window.marpEditorScheduleRender = function() {
+      setStatus("Editing...");
+      clearTimeout(renderTimer);
+      renderTimer = setTimeout(() => renderPreview(), 800);
+    };
+
+    window.marpEditorSave = async function() {
+      if (!store.currentFile) {
+        toastFrontendError("No filename set.");
+        return;
+      }
+      setStatus("Saving...");
+      try {
+        await callJsonApi("/api/plugins/marp-presentations/marp_save", {
+          filename: store.currentFile,
+          content: store.currentContent
+        });
+        setStatus("Saved");
+        toastFrontendSuccess("Saved: " + store.currentFile);
+      } catch (e) {
+        setStatus("Save failed");
+        toastFrontendError("Save failed: " + e.message);
+      }
+    };
+
+    window.marpEditorSaveAndClose = async function() {
+      await window.marpEditorSave();
+      await store.renderSlides();
+      closeModal();
+    };
+  </script>
+</body>
+</html>
