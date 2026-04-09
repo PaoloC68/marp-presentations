@@ -299,25 +299,67 @@
       }
     }
 
-    // Jump editor cursor to the start of slide N (0-based)
+    // Jump editor cursor to the start of slide N (0-based, matching Marp slide count)
     function jumpToSlide(slideIndex) {
       const content = store.currentContent || '';
-      // Split on slide separators (--- on its own line)
-      const parts = content.split(/\n---\n/);
-      if (slideIndex >= parts.length) return;
+      if (!content.trim()) return;
 
-      let charPos = 0;
-      for (let i = 0; i < slideIndex; i++) {
-        charPos += parts[i].length + 5; // '\n---\n' = 5 chars
+      // Find all slide separator positions: lines that are exactly "---"
+      // The first "---...---" block is YAML frontmatter — not a slide separator
+      const lines = content.split('\n');
+      let charOffset = 0;
+      const separators = []; // character positions of slide starts (after ---)
+      let inFrontmatter = false;
+      let frontmatterDone = false;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (i === 0 && line === '---') {
+          // Start of YAML frontmatter
+          inFrontmatter = true;
+          charOffset += lines[i].length + 1;
+          continue;
+        }
+        if (inFrontmatter && (line === '---' || line === '...')) {
+          // End of frontmatter
+          inFrontmatter = false;
+          frontmatterDone = true;
+          charOffset += lines[i].length + 1;
+          // After frontmatter ends, the next slide starts here
+          separators.push(charOffset);
+          continue;
+        }
+        if (inFrontmatter) {
+          charOffset += lines[i].length + 1;
+          continue;
+        }
+        if (frontmatterDone && line === '---') {
+          // Slide separator — next slide starts after this line
+          charOffset += lines[i].length + 1;
+          separators.push(charOffset);
+          continue;
+        }
+        charOffset += lines[i].length + 1;
       }
-      // Skip leading newlines in the target slide
+
+      // If no frontmatter found, treat whole content as starting at 0
+      if (separators.length === 0 && !frontmatterDone) {
+        separators.push(0);
+      }
+
+      if (slideIndex >= separators.length) {
+        slideIndex = separators.length - 1;
+      }
+      if (slideIndex < 0) return;
+
+      let charPos = separators[slideIndex];
+      // Skip any leading blank lines after separator
       while (charPos < content.length && content[charPos] === '\n') charPos++;
 
       if (cmView && cmReady) {
         cmView.dispatch({
           selection: { anchor: charPos },
-          scrollIntoView: true,
-          effects: EditorView_scrollTo(charPos)
+          scrollIntoView: true
         });
         cmView.focus();
       } else {
