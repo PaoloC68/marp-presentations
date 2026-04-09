@@ -4,7 +4,7 @@
  * Usage: echo '{"markdown":"# Hi"}' | node render.js
  * Output: JSON {"html":"...","css":"...","slideCount":N}
  */
-const { Marp } = require('/a0/usr/plugins/marp-presentations/node_modules/@marp-team/marp-core');
+const { Marp } = require(require('path').join(__dirname, '../node_modules/@marp-team/marp-core'));
 
 let input = '';
 process.stdin.setEncoding('utf-8');
