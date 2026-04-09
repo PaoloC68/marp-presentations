@@ -218,8 +218,12 @@
 
     async function loadCodeMirror() {
       try {
-        const { EditorView, basicSetup, EditorState, markdown, oneDark } =
-          await import('/plugins/marp-presentations/webui/codemirror-bundle.js');
+        const [{ EditorView, basicSetup }, { EditorState }, { markdown }, { oneDark }] = await Promise.all([
+          import('https://esm.sh/codemirror@6.0.1'),
+          import('https://esm.sh/@codemirror/state@6.5.1'),
+          import('https://esm.sh/@codemirror/lang-markdown@6.3.3'),
+          import('https://esm.sh/@codemirror/theme-one-dark@6.1.2'),
+        ]);
 
         const container = document.getElementById("marp-codemirror");
         if (!container) return;
